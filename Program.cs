@@ -3,6 +3,7 @@ using System.Windows.Media;
 using System.Windows.Input;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
+using static System.Math;
 
 namespace A25;
 
@@ -25,7 +26,7 @@ class MyWindow : Window {
       image.Source = mBmp;
       Content = image;
 
-      DrawMandelbrot (-0.5, 0, 1);
+      MouseDown += OnMouseDown;
    }
 
    void DrawMandelbrot (double xc, double yc, double zoom) {
@@ -56,19 +57,55 @@ class MyWindow : Window {
       return 0;
    }
 
-   void OnMouseMove (object sender, MouseEventArgs e) {
+   static List<Point> mPts = new ();
+
+   private void OnMouseDown (object sender, MouseButtonEventArgs e) {
       if (e.LeftButton == MouseButtonState.Pressed) {
-         try {
-            mBmp.Lock ();
-            mBase = mBmp.BackBuffer;
-            var pt = e.GetPosition (this);
-            int x = (int)pt.X, y = (int)pt.Y;
-            SetPixel (x, y, 255);
-            mBmp.AddDirtyRect (new Int32Rect (x, y, 1, 1));
-         } finally {
-            mBmp.Unlock ();
+         mPts.Add (e.GetPosition (this));
+         if (mPts.Count == 2) {
+            try {
+               mBmp.Lock ();
+               mBase = mBmp.BackBuffer;
+               var (p1, p2) = (mPts[0], mPts[1]);
+               PlotLine ((int)p1.X, (int)p1.Y, (int)p2.X, (int)p2.Y);
+               mBmp.AddDirtyRect (GetBounds (p1, p2));
+            } finally {
+               mBmp.Unlock ();
+            }
+            mPts = new ();
          }
       }
+   }
+
+   void PlotLine (int x0, int y0, int x1, int y1) {
+      var dx = Abs (x1 - x0);
+      var sx = x0 < x1 ? 1 : -1;
+      var dy = -Abs (y1 - y0);
+      var sy = y0 < y1 ? 1 : -1;
+      var error = dx + dy;
+      while (true) {
+         SetPixel (x0, y0, 255);
+         if (x0 == x1 && y0 == y1) break;
+         var e2 = 2 * error;
+         if (e2 >= dy) {
+            if (x0 == x1) break;
+            error += dy;
+            x0 += sx;
+         }
+         if (e2 <= dx) {
+            if (y0 == y1) break;
+            error += dx;
+            y0 += sy;
+         }
+      }
+   }
+
+   static Int32Rect GetBounds (Point p1, Point p2) {
+      int xmin = (int)Math.Min (p1.X, p2.X);
+      int xmax = (int)Math.Max (p1.X, p2.X);
+      int ymin = (int)Math.Min (p1.Y, p2.Y);
+      int ymax = (int)Math.Max (p1.Y, p2.Y);
+      return new Int32Rect (xmin, ymin, xmax - xmin, ymax - ymin);
    }
 
    void DrawGraySquare () {
